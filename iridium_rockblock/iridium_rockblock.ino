@@ -164,7 +164,7 @@ void loop() {
       Serial.print("SignalQuality failed: error ");
       Serial.println(status);
     } else {
-      Serial.print("Signal Quality (0~5): ")
+      Serial.print("Signal Quality (0~5): ");
       Serial.println(signalQuality);
     }
   } else if (fsmstate == EXIT) {
