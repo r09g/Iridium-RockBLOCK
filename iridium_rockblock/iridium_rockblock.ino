@@ -96,6 +96,8 @@ void loop() {
         fsmstate = GET_SYSTEM_TIME;
       } else if(strcmp(msg,"start") == 0){
         fsmstate = WAKE_MODEM; 
+      } else if(strcmp(msg,"exit") == 0){
+        fsmstate = EXIT; 
       } else {
         fsmstate = ENTER_CMD;
         Serial.println("Command not recognized.");
