@@ -1,6 +1,7 @@
 // Control of RockBLOCK to access the Iridium SatComm Network with Arduino
 // Author: Raymond Yang
 // Date: 20190627
+// Version 1.0
 
 /*
  * Error Codes:
