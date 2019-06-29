@@ -1,7 +1,7 @@
 // Control of RockBLOCK to access the Iridium SatComm Network with Arduino
 // Author: Raymond Yang
 // Date: 20190627
-// Version 1.4
+// Version 1.5
 
 /*
    Commands:
@@ -47,7 +47,7 @@
 #define SEND_GPS -6
 
 SoftwareSerial rbserial(10, 11); // 10 is RX and 11 is TX
-SoftwareSerial gpsserial(3, 4); // 3 is RX and 4 is TX
+SoftwareSerial gpsserial(5, 6); // 5 is RX and 6 is TX
 IridiumSBD modem(rbserial, SLEEP_PIN); // declare IridiumSBD object
 TinyGPSPlus gps; // gps object
 
@@ -190,44 +190,44 @@ void loop() {
     delay(500UL);
     exit(0);
   } else if (fsmstate == SEND_GPS) {
-//    gpsserial.listen(); // listen to GPS
-//    // listen for gps traffic
-//    unsigned long loopStartTime = millis(); // start time
-//    Serial.println("Beginning to listen for GPS traffic...");
-//    while ((!gps.location.isValid() || !gps.date.isValid()) && millis() - loopStartTime < 7UL * 60UL * 1000UL) {
-//      if (gpsserial.available()) {
-//        gps.encode(gpsserial.read());
-//      }
-//    }
-//
-//    // check for GPS fix
-//    while (!gps.location.isValid()) {
-//      Serial.println("Could not get GPS fix.\n");
-//      delay(1000UL);
-//    }
-//    Serial.println("A GPS fix was found!\n");
-//
-//    char outBuffer[60];
-//    sprintf(outBuffer, "%d%02d%02d%02d%02d%02d,%s%u.%09lu,%s%u.%09lu,%lu,%ld",
-//            gps.date.year(),
-//            gps.date.month(),
-//            gps.date.day(),
-//            gps.time.hour(),
-//            gps.time.minute(),
-//            gps.time.second(),
-//            gps.location.rawLat().negative ? "-" : "",
-//            gps.location.rawLat().deg,
-//            gps.location.rawLat().billionths,
-//            gps.location.rawLng().negative ? "-" : "",
-//            gps.location.rawLng().deg,
-//            gps.location.rawLng().billionths,
-//            gps.speed.value() / 100,
-//            gps.course.value() / 100
-//           );
-//
-//    Serial.print("Transmitting message '");
-//    Serial.print(outBuffer);
-//    Serial.println("'");
+    gpsserial.listen(); // listen to GPS
+    // listen for gps traffic
+    unsigned long loopStartTime = millis(); // start time
+    Serial.println("Beginning to listen for GPS traffic...");
+    while ((!gps.location.isValid() || !gps.date.isValid()) && millis() - loopStartTime < 7UL * 60UL * 1000UL) {
+      if (gpsserial.available()) {
+        gps.encode(gpsserial.read());
+      }
+    }
+
+    // check for GPS fix
+    while (!gps.location.isValid()) {
+      Serial.println("Could not get GPS fix.\n");
+      delay(1000UL);
+    }
+    Serial.println("A GPS fix was found!\n");
+
+    char outBuffer[60];
+    sprintf(outBuffer, "%d%02d%02d%02d%02d%02d,%s%u.%09lu,%s%u.%09lu,%lu,%ld",
+            gps.date.year(),
+            gps.date.month(),
+            gps.date.day(),
+            gps.time.hour(),
+            gps.time.minute(),
+            gps.time.second(),
+            gps.location.rawLat().negative ? "-" : "",
+            gps.location.rawLat().deg,
+            gps.location.rawLat().billionths,
+            gps.location.rawLng().negative ? "-" : "",
+            gps.location.rawLng().deg,
+            gps.location.rawLng().billionths,
+            gps.speed.value() / 100,
+            gps.course.value() / 100
+           );
+
+    Serial.print("Transmitting message '");
+    Serial.print(outBuffer);
+    Serial.println("'");
 
     rbserial.listen(); // listen to RockBLOCK
     int status = modem.sendSBDText("hello");
