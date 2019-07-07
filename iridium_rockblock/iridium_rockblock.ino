@@ -45,6 +45,7 @@
 #define WAKE_MODEM -4
 #define GET_SIGNAL_QUALITY -5
 #define SEND_GPS -6
+#define TEST_GPS -7
 
 SoftwareSerial rbserial(10, 11); // 10 is RX and 11 is TX
 SoftwareSerial gpsserial(5, 6); // 5 is RX and 6 is TX
@@ -121,6 +122,8 @@ void loop() {
         fsmstate = GET_SIGNAL_QUALITY;
       } else if (strcmp(msg, "sendgps") == 0) {
         fsmstate = SEND_GPS;
+      } else if (strcmp(msg, "testgps") == 0) {
+        fsmstate = TEST_GPS;
       } else {
         fsmstate = ENTER_CMD;
         Serial.println("Command not recognized.");
@@ -189,6 +192,46 @@ void loop() {
     Serial.println("Connection Terminated.\n");
     delay(500UL);
     exit(0);
+  } else if(fsmstate == TEST_GPS){
+    gpsserial.listen(); // listen to GPS
+    // listen for gps traffic
+    unsigned long loopStartTime = millis(); // start time
+    Serial.println("Beginning to listen for GPS traffic...");
+    while ((!gps.location.isValid() || !gps.date.isValid()) && millis() - loopStartTime < 7UL * 60UL * 1000UL) {
+      if (gpsserial.available()) {
+        gps.encode(gpsserial.read());
+      }
+    }
+
+    // check for GPS fix
+    while (!gps.location.isValid()) {
+      Serial.println("Could not get GPS fix.\n");
+      delay(1000UL);
+    }
+    Serial.println("A GPS fix was found!\n");
+
+    char outBuffer[60];
+    sprintf(outBuffer, "%d%02d%02d%02d%02d%02d,%s%u.%09lu,%s%u.%09lu,%lu,%ld",
+            gps.date.year(),
+            gps.date.month(),
+            gps.date.day(),
+            gps.time.hour(),
+            gps.time.minute(),
+            gps.time.second(),
+            gps.location.rawLat().negative ? "-" : "",
+            gps.location.rawLat().deg,
+            gps.location.rawLat().billionths,
+            gps.location.rawLng().negative ? "-" : "",
+            gps.location.rawLng().deg,
+            gps.location.rawLng().billionths,
+            gps.speed.value() / 100,
+            gps.course.value() / 100
+           );
+
+    Serial.print("GPS Data: ");
+    Serial.println(outBuffer);
+
+    rbserial.listen();
   } else if (fsmstate == SEND_GPS) {
     gpsserial.listen(); // listen to GPS
     // listen for gps traffic
@@ -230,13 +273,13 @@ void loop() {
     Serial.println("'");
 
     rbserial.listen(); // listen to RockBLOCK
-    int status = modem.sendSBDText("hello");
+    int status = modem.sendSBDText(outBuffer);
     if (status != ISBD_SUCCESS) {
       Serial.print("Transmission failed with error code ");
       Serial.println(status);
       Serial.println();
     } else {
-      Serial.println("Message sent successfully.\n");
+      Serial.println("Connected to Network.\n");
     }
   } else {
     // not going to happen
