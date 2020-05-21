@@ -1,8 +1,11 @@
-// Control of RockBLOCK to access the Iridium SatComm Network with Arduino
-// Author: Raymond Yang
-// Date: 20190627
-// Version 1.6
-
+/*
+ * RockBlock MK2 Satellite Communications Module with Iridium 9602 Modem 
+ * Microcontroller: Teensy 3.5
+ * Author: Raymond Yang
+ * Date: 2020-05-20
+ * Version: 1.7
+ */
+ 
 /*
    Commands:
    1. wake
@@ -12,6 +15,7 @@
    5. signal
    6. testgps
    7. exit
+   8. help (view commands)
    
    Error Codes:
    ISBD_SUCCESS 0
@@ -30,13 +34,15 @@
    ISBD_MSG_TOO_LONG 13
 */
 
-#include <SoftwareSerial.h>
 #include <IridiumSBD.h>
 #include <time.h>
-#include <TinyGPS++.h>
+#include <TinyGPS++.h>  // for parsing GPS data
 
-#define DIAGNOSTICS true
+// Pin I/O and options
+#define DIAGNOSTICS false   // verbose option
 #define SLEEP_PIN 4
+#define gpsserial Serial1 // pins MCU_RX/MCU_TX = 0/1
+#define rbserial Serial3  // pins MCU_RX/MCU_TX = 7/8
 
 // command states
 #define ENTER_CMD 0
@@ -48,28 +54,23 @@
 #define SEND_GPS -6
 #define TEST_GPS -7
 
-SoftwareSerial rbserial(10, 11); // 10 is RX and 11 is TX
-SoftwareSerial gpsserial(5, 6); // 5 is RX and 6 is TX
-IridiumSBD modem(rbserial, SLEEP_PIN); // declare IridiumSBD object
-TinyGPSPlus gps; // gps object
+IridiumSBD modem(rbserial, SLEEP_PIN);
+TinyGPSPlus gps;
 
-static int fsmstate = 0; // user command
+static int fsmstate = ENTER_CMD; // at initialization wait for command
 
 void setup() {
-  Serial.begin(115200); // data rate for desktop - arduino
+  Serial.begin(115200); // data rate for desktop - teensy
   while (!Serial) {} // wait for serial to connect
   Serial.println("Desktop - Arduino Connection Established.");
-
   rbserial.begin(19200); // data rate for arduino - iridium serial port
   Serial.println("Arduino - Iridium Connection Established.");
-
-  gpsserial.begin(9600); // data rate for arduino - gps serial port
+  gpsserial.begin(38400); // data rate for arduino - gps serial port (neo-m9n uses 38400)
   Serial.println("Arduino - GPS Connection Established.");
 
   modem.setPowerProfile(IridiumSBD::USB_POWER_PROFILE); // low power profile
 
   Serial.println("Starting modem...");
-  rbserial.listen(); // listen to RockBLOCK
   int status = modem.begin(); // wake modem
   if (status != ISBD_SUCCESS) {
     Serial.print("Begin failed: error ");
@@ -125,13 +126,17 @@ void loop() {
         fsmstate = SEND_GPS;
       } else if (strcmp(msg, "testgps") == 0) {
         fsmstate = TEST_GPS;
+      } else if (strcmp(msg, "help") == 0) {
+        Serial.println("sleep | systime | wake | exit | signal | sendgps | testgps");
+        fsmstate = ENTER_CMD;
       } else {
         fsmstate = ENTER_CMD;
         Serial.println("Command not recognized.");
       }
     }
   }
-
+  
+// ====================================================================================
   if (fsmstate == WAKE_MODEM) {
     Serial.println("Starting modem...");
     int status = modem.begin(); // wake modem
@@ -144,6 +149,8 @@ void loop() {
     } else {
       Serial.println("Modem Ready.\n");
     }
+
+// ====================================================================================    
   } else if (fsmstate == SLEEP_MODEM) {
     Serial.println("Putting modem to sleep...");
     int status = modem.sleep();
@@ -153,6 +160,8 @@ void loop() {
     } else {
       Serial.println("Modem is asleep.\n");
     }
+
+// ====================================================================================    
   } else if (fsmstate == GET_SYSTEM_TIME) {
     boolean network = false;
     int tries = 0;
@@ -176,6 +185,8 @@ void loop() {
         Serial.println();
       }
     }
+
+// ====================================================================================    
   } else if (fsmstate == GET_SIGNAL_QUALITY) {
     // returns a number between 0 and 5
     // 2 or better is preferred
@@ -189,91 +200,103 @@ void loop() {
       Serial.println(signalQuality);
       Serial.println();
     }
+
+// ====================================================================================    
   } else if (fsmstate == EXIT) {
     Serial.println("Connection Terminated.\n");
     delay(500UL);
     exit(0);
-  } else if(fsmstate == TEST_GPS){
-    gpsserial.listen(); // listen to GPS
+
+// ====================================================================================    
+  } else if(fsmstate == TEST_GPS) {
+    
     // listen for gps traffic
     unsigned long loopStartTime = millis(); // start time
     Serial.println("Beginning to listen for GPS traffic...");
-    while ((!gps.location.isValid() || !gps.date.isValid()) && millis() - loopStartTime < 7UL * 60UL * 1000UL) {
-      if (gpsserial.available()) {
-        gps.encode(gpsserial.read());
+
+    // check for GPS fix
+    while (millis() - loopStartTime < 1UL * 60UL * 1000UL && !Serial.available()) {
+      while (gpsserial.available()) {
+        if(gps.encode(gpsserial.read())){
+          
+          /*
+          // Version 1
+          char outBuffer[60];
+          sprintf(outBuffer, "%d%02d%02d,%02d%02d%02d,%s%u.%09lu,%s%u.%09lu,%lu,%ld",
+                  gps.date.year(),
+                  gps.date.month(),
+                  gps.date.day(),
+                  gps.time.hour(),
+                  gps.time.minute(),
+                  gps.time.second(),
+                  gps.location.rawLat().negative ? "-" : "",
+                  gps.location.rawLat().deg,
+                  gps.location.rawLat().billionths,
+                  gps.location.rawLng().negative ? "-" : "",
+                  gps.location.rawLng().deg,
+                  gps.location.rawLng().billionths,
+                  gps.speed.value() / 100,
+                  gps.course.value() / 100
+                 );
+      
+          Serial.print("GPS Data: ");
+          Serial.println(outBuffer);
+          */
+
+          // Version 2
+          char outBuffer[60];
+          sprintf(outBuffer, "%d%02d%02d,%02d%02d%02d,%012.9lf,%012.9lf,%05.0lf,%06.1lf,%02lu",
+                  gps.date.year(),
+                  gps.date.month(),
+                  gps.date.day(),
+                  gps.time.hour(),
+                  gps.time.minute(),
+                  gps.time.second(),
+                  gps.location.lat(),
+                  gps.location.lng(),
+                  gps.altitude.meters(),
+                  gps.speed.kmph() / 100,
+                  gps.satellites.value()
+          );
+      
+          Serial.print("GPS Data: ");
+          Serial.println(outBuffer);
+        }
       }
     }
 
-    // check for GPS fix
-    while (!gps.location.isValid()) {
-      Serial.println("Could not get GPS fix.\n");
-      delay(1000UL);
-    }
-    Serial.println("A GPS fix was found!\n");
-
-    char outBuffer[60];
-    sprintf(outBuffer, "%d%02d%02d%02d%02d%02d,%s%u.%09lu,%s%u.%09lu,%lu,%ld",
-            gps.date.year(),
-            gps.date.month(),
-            gps.date.day(),
-            gps.time.hour(),
-            gps.time.minute(),
-            gps.time.second(),
-            gps.location.rawLat().negative ? "-" : "",
-            gps.location.rawLat().deg,
-            gps.location.rawLat().billionths,
-            gps.location.rawLng().negative ? "-" : "",
-            gps.location.rawLng().deg,
-            gps.location.rawLng().billionths,
-            gps.speed.value() / 100,
-            gps.course.value() / 100
-           );
-
-    Serial.print("GPS Data: ");
-    Serial.println(outBuffer);
-
-    rbserial.listen();
+// ====================================================================================    
   } else if (fsmstate == SEND_GPS) {
-    gpsserial.listen(); // listen to GPS
+    
     // listen for gps traffic
     unsigned long loopStartTime = millis(); // start time
     Serial.println("Beginning to listen for GPS traffic...");
-    while ((!gps.location.isValid() || !gps.date.isValid()) && millis() - loopStartTime < 7UL * 60UL * 1000UL) {
+    while (!gps.location.isValid() && millis() - loopStartTime < 1UL * 60UL * 1000UL) {
       if (gpsserial.available()) {
         gps.encode(gpsserial.read());
       }
     }
-
-    // check for GPS fix
-    while (!gps.location.isValid()) {
-      Serial.println("Could not get GPS fix.\n");
-      delay(1000UL);
-    }
-    Serial.println("A GPS fix was found!\n");
-
+    Serial.println("Detected valid GPS data.");
+    
     char outBuffer[60];
-    sprintf(outBuffer, "%d%02d%02d%02d%02d%02d,%s%u.%09lu,%s%u.%09lu,%lu,%ld",
+    sprintf(outBuffer, "%d%02d%02d,%02d%02d%02d,%012.9lf,%012.9lf,%05.0lf,%06.1lf,%02lu",
             gps.date.year(),
             gps.date.month(),
             gps.date.day(),
             gps.time.hour(),
             gps.time.minute(),
             gps.time.second(),
-            gps.location.rawLat().negative ? "-" : "",
-            gps.location.rawLat().deg,
-            gps.location.rawLat().billionths,
-            gps.location.rawLng().negative ? "-" : "",
-            gps.location.rawLng().deg,
-            gps.location.rawLng().billionths,
-            gps.speed.value() / 100,
-            gps.course.value() / 100
-           );
+            gps.location.lat(),
+            gps.location.lng(),
+            gps.altitude.meters(),
+            gps.speed.kmph() / 100,
+            gps.satellites.value()
+    );
 
     Serial.print("Transmitting message '");
     Serial.print(outBuffer);
     Serial.println("'");
-
-    rbserial.listen(); // listen to RockBLOCK
+    
     int status = modem.sendSBDText(outBuffer);
     if (status != ISBD_SUCCESS) {
       Serial.print("Transmission failed with error code ");
@@ -282,6 +305,7 @@ void loop() {
     } else {
       Serial.println("Connected to Network.\n");
     }
+
   } else {
     // not going to happen
   }
@@ -289,44 +313,13 @@ void loop() {
   fsmstate = ENTER_CMD; // reset state
 }
 
-// retrieve system time
-void getIridiumTime(IridiumSBD modem) {
-  boolean network = false;
-  int tries = 0;
-  while (tries < 5 && network == false) {
-    struct tm t; // time structure to store time
-    int status = modem.getSystemTime(t); // retrieve time
-    if (status == ISBD_SUCCESS) {
-      char buffer[32]; // data buffer
-      sprintf(buffer, "%d-%02d-%02d %02d:%02d:%02d", t.tm_year + 1900, t.tm_mon + 1, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec);
-      Serial.print("Iridium time/date is: ");
-      Serial.println(buffer);
-      network = true;
-    } else if (status == ISBD_NO_NETWORK) {
-      Serial.println("No network detected. Waiting 5 seconds.");
-      tries++;
-      delay(5 * 1000UL); // 5 seconds
-    } else {
-      Serial.print("Unexpected error ");
-      Serial.println(status);
-      Serial.println();
-    }
-  }
-
-  if(tries >= 4){
-    Serial.println("Maximum tries reached. Failed to retrieve system time.");
-    Serial.println("Modem Ready.\n");
-  }
-}
-
+// ====================================================================================
 #if DIAGNOSTICS
-void ISBDConsoleCallback(IridiumSBD * device, char c)
-{
+void ISBDConsoleCallback(IridiumSBD * device, char c){
   Serial.write(c);
 }
 
-void ISBDDiagsCallback(IridiumSBD * device, char c)
-{
+void ISBDDiagsCallback(IridiumSBD * device, char c){
   Serial.write(c);
 }
 #endif
