@@ -6,16 +6,16 @@ Link to RockBLOCK's control panel: [RockBLOCK Control Panel](https://rockblock.r
 Link to Sparkfun where the RockBLOCK was purchased: [RockBLOCK on Sparkfun](https://www.sparkfun.com/products/13745)
 
 ## Hardware
-- Arduino Uno
+- Teensy 3.5
 - RockBLOCK MK2
-- Adafruit Ultimate GPS
+- NEO M9N GPS Module
 
 ## Dependencies
 - ___IridiumSBD___ Arduino Library
 - ___TinyGPS++___ Arduino Library
 
 ## Setup
-Change the virtual TX and RX pins and the SLEEP_PIN in the beginning of the code according to how the physical wiring is done. Open the Serial Monitor and set the Baud Rate to 115200.
+Open the Serial Monitor and set the Baud Rate to 115200.
 
 
 
